@@ -18,9 +18,9 @@ class Company(Base):
     name = Column(String, nullable=False, comment="Название компании")
     building_id = Column(Integer, ForeignKey("buildings.id"))
     
-    building = relationship("Building", back_populates="companies")
-    activities = relationship("Activity", secondary=company_activity, back_populates="companies")
-    phones = relationship("CompanyPhone", back_populates="company")
+    building = relationship("Building", back_populates="companies", lazy="selectin")
+    activities = relationship("Activity", secondary=company_activity, back_populates="companies", lazy="selectin")
+    phones = relationship("CompanyPhone", back_populates="company",  lazy="selectin")
 
 
 class CompanyPhone(Base):
