@@ -1,50 +1,60 @@
 from sqlalchemy import select, and_
 from geopy.distance import geodesic
-from sqlalchemy.orm import selectinload
-from database.models.building import Building
-from database.models.activity import Activity
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.activity import ActivityService
-from database.models.company import Company, CompanyPhone
-from database.schemas.company import CompanyCreate, CompanyUpdate
+from app.services.building import BuildingService
+from app.database.models.building import Building
+from app.database.models.activity import Activity
+from app.database.models.company import Company, CompanyPhone
+from app.database.schemas.company import CompanyCreate, CompanyUpdate
+from app.services.exceptions import BuildingNotFound, ActivityNotFound
+
 
 
 class CompanyService:
-
+    async def get(self, db: AsyncSession, company_id: int):
+        result = await db.execute(
+            select(Company)
+            .where(Company.id == company_id)
+        )
+        return result.scalar_one_or_none()
+    
+    async def get_multi(self, db: AsyncSession, skip: int = 0, limit: int = 100):
+        result = await db.execute(
+            select(Company)
+            .offset(skip)
+            .limit(limit)
+        )
+        return result.scalars().all()
+    
+    async def create(self, db: AsyncSession, skip: int = 0, limit: int = 100):
+        result = await db.execute(
+            select(Company)
+            .offset(skip)
+            .limit(limit)
+        )
+        return result.scalars().all()
+    
+    async def delete(self, db: AsyncSession, skip: int = 0, limit: int = 100):
+        result = await db.execute(
+            select(Company)
+            .offset(skip)
+            .limit(limit)
+        )
+        return result.scalars().all()
+    
     async def get_companies(self, db: AsyncSession, skip: int = 0, limit: int = 100):
         result = await db.execute(
             select(Company)
-            .options(
-                selectinload(Company.building),
-                selectinload(Company.activities),
-                selectinload(Company.phones)
-            )
             .offset(skip)
             .limit(limit)
         )
         return result.scalars().all()
 
-    async def get_company_by_id(self, db: AsyncSession, company_id: int):
-        result = await db.execute(
-            select(Company)
-            .where(Company.id == company_id)
-            .options(
-                selectinload(Company.building),
-                selectinload(Company.activities),
-                selectinload(Company.phones)
-            )
-        )
-        return result.scalar_one_or_none()
-
     async def get_companies_by_building(self, db: AsyncSession, building_id: int):
         result = await db.execute(
             select(Company)
             .where(Company.building_id == building_id)
-            .options(
-                selectinload(Company.building),
-                selectinload(Company.activities),
-                selectinload(Company.phones)
-            )
         )
         return result.scalars().all()
 
@@ -55,11 +65,6 @@ class CompanyService:
             .where(
                 Company.activities.any(Activity.id.in_(activity_descendants))
             )
-            .options(
-                selectinload(Company.building),
-                selectinload(Company.activities),
-                selectinload(Company.phones)
-            )
         )
         return result.scalars().all()
 
@@ -67,22 +72,12 @@ class CompanyService:
         result = await db.execute(
             select(Company)
             .where(Company.name.ilike(f"%{name}%"))
-            .options(
-                selectinload(Company.building),
-                selectinload(Company.activities),
-                selectinload(Company.phones)
-            )
         )
         return result.scalars().all()
 
     async def get_companies_in_radius(self, db: AsyncSession, center_lat: float, center_lng: float, radius_km: float):
         result = await db.execute(
             select(Building)
-            .options(
-                selectinload(Building.companies)
-                .selectinload(Company.activities)
-                .selectinload(Company.phones)
-            )
         )
         buildings = result.scalars().all()
         
@@ -116,11 +111,6 @@ class CompanyService:
                     Building.longitude <= lng_max
                 )
             )
-            .options(
-                selectinload(Building.companies)
-                .selectinload(Company.activities)
-                .selectinload(Company.phones)
-            )
         )
         buildings = result.scalars().all()
         
@@ -147,25 +137,25 @@ class CompanyService:
         result = await db.execute(
             select(Company)
             .where(Company.activities.any(Activity.id.in_(all_activity_ids)))
-            .options(
-                selectinload(Company.building),
-                selectinload(Company.activities),
-                selectinload(Company.phones)
-            )
         )
         return result.scalars().all()
 
     async def create_company(self, db: AsyncSession, company_data: CompanyCreate):
+        building = await BuildingService().get(db, company_data.building_id)
+        if not building:
+            raise BuildingNotFound(f"Building with id {company_data.building_id} not found")
+        
         db_company = Company(
             name=company_data.name,
             building_id=company_data.building_id
         )
-        
         if company_data.activity_ids:
             result = await db.execute(
                 select(Activity).where(Activity.id.in_(company_data.activity_ids))
             )
             activities = result.scalars().all()
+            if len(activities) < 1:
+                raise ActivityNotFound(f"Activities with id {company_data.activity_ids} not found")
             db_company.activities.extend(activities)
         
         for phone in company_data.phone_numbers:
@@ -179,16 +169,11 @@ class CompanyService:
         result = await db.execute(
             select(Company)
             .where(Company.id == db_company.id)
-            .options(
-                selectinload(Company.building),
-                selectinload(Company.activities),
-                selectinload(Company.phones)
-            )
         )
         return result.scalar_one()
 
     async def update_company(self, db: AsyncSession, company_id: int, company_data: CompanyUpdate):
-        db_company = await self.get_company_by_id(db, company_id)
+        db_company = await self.get(db, company_id)
         if not db_company:
             return None
         
@@ -216,13 +201,7 @@ class CompanyService:
         await db.commit()
         await db.refresh(db_company)
         
-        result = await db.execute(
-            select(Company)
-            .where(Company.id == db_company.id)
-            .options(
-                selectinload(Company.building),
-                selectinload(Company.activities),
-                selectinload(Company.phones)
-            )
-        )
-        return result.scalar_one()
+        return db_company
+    
+def get_company_service():
+    return CompanyService()
