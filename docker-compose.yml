@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      - SECRET_KEY=${SECRET_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        sleep 10 &&
+        echo 'Creating migration...' &&
+        alembic --config=/app/app/alembic.ini revision --autogenerate -m 'Create initial tables' || echo 'Autogenerate failed, continuing...' &&
+        echo 'Running migrations...' &&
+        alembic --config=/app/app/alembic.ini upgrade head &&
+        echo 'Starting web server...' &&
+        uvicorn app.fastapi_app:app --host 0.0.0.0 --port 8000 --reload
+      "
+
+volumes:
+  postgres_data:

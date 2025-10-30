@@ -1,12 +1,12 @@
 import uvicorn
 import asyncio
-from app.app import app
+from app.fastapi_app import app
 from app.database.database import create_tables
 from app.database.run_mock import seed_data
 
 async def start_fastapi():
-    await create_tables()
-    await seed_data()
+    # await create_tables()
+    # await seed_data()
     config = uvicorn.Config(
         app,
         host="0.0.0.0",

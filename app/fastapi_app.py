@@ -3,6 +3,7 @@ from fastapi.openapi.utils import get_openapi
 from app.routers.activity import ActivityRouter
 from app.routers.building import BuildingRouter
 from app.routers.company import CompanyRouter
+from app.database.run_mock import seed_data
 
 
 app = FastAPI(
@@ -38,6 +39,12 @@ app.openapi = custom_openapi
 def read_root():
     return {"message": "Company Directory API"}
 
+@app.post("/")
+async def create_mock_data():
+    try:
+        return await seed_data()
+    except Exception as e:
+        return {"error": str(e)}
 
 app.include_router(ActivityRouter().get_router())
 app.include_router(BuildingRouter().get_router())
