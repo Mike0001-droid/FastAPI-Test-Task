@@ -151,7 +151,8 @@ async def seed_data():
         
         await db.commit()
         
-        print("Тестовые данные успешно добавлены!")
-        print(f"Создано: {len(activities)} видов деятельности")
-        print(f"Создано: {len(buildings)} зданий")
-        print(f"Создано: {len(companies_data)} компаний")
+        return {
+            "Виды деятельности": len(activities),
+            "Здания": len(buildings),
+            "Компании": len(companies_data)
+        }
